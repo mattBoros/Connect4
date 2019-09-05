@@ -81,38 +81,38 @@ public:
  
     inline bool scoreSlow(const uint64_t pieces) const;
 
-    template<const bool current_color>
     inline int8_t MTDF(const State node) const;
 
-    template<const bool current_color, const uint8_t depth>
+    template<const uint8_t depth>
     int8_t const inline pvs_init(const State node,
                                  int8_t alpha, const int8_t beta,
                                  uint8_t *&move_to_make) const;
 
-    template<const bool current_color, const uint8_t depth>
+    template<const uint8_t depth>
     int8_t const inline pvs(const State node,
                             const int8_t alpha, const int8_t beta) const
     __attribute__ ((hot, no_stack_limit));
 
 
-    template<const bool current_color, const uint8_t depth>
+    template<const uint8_t depth>
     int8_t const inline pvs_no_ttable(const State node,
                             const int8_t alpha, const int8_t beta) const
     __attribute__ ((hot, no_stack_limit));
 
+//    template<const bool current_color, const bool cache_still_in_use>
     template<const bool current_color>
     inline State applyAction(const uint64_t child_board, const State node, const uint8_t row, const uint8_t col) const
     __attribute__ ((const));
 
 
-    template<const bool current_color, const uint8_t depth>
+    template<const uint8_t depth>
     inline int8_t pvs_no_ttable_no_cache(const State node,
                                          int8_t alpha, const int8_t beta) const
     __attribute__ ((hot, no_stack_limit));
 
     inline uint8_t getColHeight(const uint64_t ORd_board, const uint8_t col) const;
 
-    inline uint8_t getColHeight(const State state, const uint8_t col) const __attribute__ ((const));
+    inline uint8_t getColHeight(const State state, const uint8_t col) const __attribute__ ((hot, const));
 
     inline const bool score(const uint64_t pieces, const uint8_t row, const uint8_t col) const
     __attribute__ ((hot, const));
@@ -156,7 +156,6 @@ inline bool AlphaBeta<maxDepth, side>::scoreSlow(const uint64_t pieces) const {
 }
 
 template<const uint8_t maxDepth, const bool side>
-template<const bool current_color>
 int8_t AlphaBeta<maxDepth, side>::MTDF(const State node) const {
     int8_t g = 0;
     int8_t upperBound = POS_INFINITY;
@@ -167,7 +166,7 @@ int8_t AlphaBeta<maxDepth, side>::MTDF(const State node) const {
         cout << "Lower bound " << (int) lowerBound << endl;
         cout << "Upper bound " << (int) upperBound << endl;
         cout << "beta " << (int) beta << endl;
-        g = pvs_init<current_color, 0>(node, beta - 1, beta, move_to_make);
+        g = pvs_init<0>(node, beta - 1, beta, move_to_make);
         if (g < beta) {
             upperBound = g;
         } else {
@@ -180,10 +179,11 @@ int8_t AlphaBeta<maxDepth, side>::MTDF(const State node) const {
 
 
 template<const uint8_t maxDepth, const bool side>
-template<const bool current_color, const uint8_t depth>
+template<const uint8_t depth>
 int8_t const inline AlphaBeta<maxDepth, side>::pvs_init(const State node,
                                                         int8_t alpha, const int8_t beta,
                                                         uint8_t *&move_to_make) const {
+    constexpr bool current_color = (depth % 2 == 0) ? side : !side;
     constexpr uint8_t next_depth = depth + 1;
     const uint64_t my_pieces = current_color ? node.blackPieces : node.whitePieces;
 //        const uint64_t ORd_board = node.blackPieces | node.whitePieces;
@@ -195,11 +195,11 @@ int8_t const inline AlphaBeta<maxDepth, side>::pvs_init(const State node,
             const State child = applyAction<current_color>(child_board, node, row, col);
             int8_t score;
             if (i == 0) {
-                score = -pvs<!current_color, next_depth>(child, -beta, -alpha);
+                score = -pvs<next_depth>(child, -beta, -alpha);
             } else {
-                score = -pvs<!current_color, next_depth>(child, -alpha - 1, -alpha);
+                score = -pvs<next_depth>(child, -alpha - 1, -alpha);
                 if (alpha < score && score < beta) {
-                    score = -pvs<!current_color, next_depth>(child, -beta, -score);
+                    score = -pvs<next_depth>(child, -beta, -score);
                 }
             }
             if (score > alpha) {
@@ -215,19 +215,28 @@ int8_t const inline AlphaBeta<maxDepth, side>::pvs_init(const State node,
 }
 
 template<const uint8_t maxDepth, const bool side>
-template<const bool current_color, const uint8_t depth>
+template<const uint8_t depth>
 int8_t const inline AlphaBeta<maxDepth, side>::pvs(const State node,
                                                    const int8_t alpha, const int8_t beta) const {
+    constexpr bool current_color = (depth % 2 == 0) ? side : !side;
     if (depth <= 31) {
         const StoredSearch key(
                 node,
                 alpha, beta
         );
         const uint32_t key_index = node.hash_index % TTABLE_BUCKET_SIZE;
+
+//        const StoredSearch key = node.hash_index < node.reversed_hash_index ?
+//                                 StoredSearch(node, alpha, beta) :
+//                                 StoredSearch(node.reverse(), alpha, beta);
+//        const uint32_t key_index = node.hash_index < node.reversed_hash_index ?
+//                                   node.hash_index % CACHE_BUCKET_SIZE :
+//                                   node.reversed_hash_index % CACHE_BUCKET_SIZE;
+
         const StoredResult result = ttable.find(key_index, key);
         if (result.is_null()) { // doesnt exist in ttable
             if (COUNT_STATS) TIME::ttable_misses++;
-            const int8_t v = pvs_no_ttable<current_color, depth>(node, alpha, beta);
+            const int8_t v = pvs_no_ttable<depth>(node, alpha, beta);
             ttable.put(key_index, key, StoredResult(v));
             return v;
         } else {
@@ -235,23 +244,28 @@ int8_t const inline AlphaBeta<maxDepth, side>::pvs(const State node,
             return result.value;
         }
     } else {
-        return pvs_no_ttable<current_color, depth>(node, alpha, beta);
     }
+    return pvs_no_ttable<depth>(node, alpha, beta);
 }
 
+static constexpr uint8_t MAX_CACHE_STORE_DEPTH = 14;
+
 template<const uint8_t maxDepth, const bool side>
-template<const bool current_color, const uint8_t depth>
+template<const uint8_t depth>
 int8_t const inline AlphaBeta<maxDepth, side>::pvs_no_ttable(const State node,
                                                              const int8_t alpha, const int8_t beta) const {
-
+    constexpr bool current_color = (depth % 2 == 0) ? side : !side;
     // maxdepth = 35
-    // depth <= 10 : 81.65
-    // depth <= 12 : 72
-    // depth <= 13 : 63.29
-    // depth <= 14 : 62.257
-    // depth <= 15 : 70.366
+    // depth <= 10 :
+    // depth <= 12 :
+    // depth <= 13 : 74
+    // depth <= 14 : 70
+    // depth <= 15 : 71
+    // depth <= 16 : 71
+    // depth <= 17 : 71
+    // depth <= 18 : 73
 
-    if (depth <= 14) {
+    if (depth <= MAX_CACHE_STORE_DEPTH) {
         if (__builtin_expect(cache.size() >= CACHE_CAPACITY, 0)) {
             cout << "cache cleared" << endl;
             cout << "old cache size : " << cache.size() << endl;
@@ -259,15 +273,17 @@ int8_t const inline AlphaBeta<maxDepth, side>::pvs_no_ttable(const State node,
             cout << "new cache size : " << cache.size() << endl << endl;
         }
 
-        const StoredSearch key(
-                node,
-                alpha, beta
-        );
-        const uint32_t key_index = node.hash_index % CACHE_BUCKET_SIZE;
+        const StoredSearch key = node.hash_index < node.reversed_hash_index ?
+                StoredSearch(node, alpha, beta) :
+                StoredSearch(node.reverse(), alpha, beta);
+        const uint32_t key_index = node.hash_index < node.reversed_hash_index ?
+                node.hash_index % CACHE_BUCKET_SIZE :
+                node.reversed_hash_index % CACHE_BUCKET_SIZE;
+
         const StoredResult result = cache.find(key_index, key);
         if (result.is_null()) { // doesnt exist in cache
             if (COUNT_STATS) TIME::cache_misses++;
-            const int8_t v = pvs_no_ttable_no_cache<current_color, depth>(node, alpha, beta);
+            const int8_t v = pvs_no_ttable_no_cache<depth>(node, alpha, beta);
             cache.put(key_index, key, StoredResult(v));
             return v;
         } else {
@@ -275,20 +291,21 @@ int8_t const inline AlphaBeta<maxDepth, side>::pvs_no_ttable(const State node,
             return result.value;
         }
     } else {
-        return pvs_no_ttable_no_cache<current_color, depth>(node, alpha, beta);
+        return pvs_no_ttable_no_cache<depth>(node, alpha, beta);
     }
 }
 
 template<const uint8_t maxDepth, const bool side>
-template<const bool current_color, const uint8_t depth>
+template<const uint8_t depth>
 inline int8_t AlphaBeta<maxDepth, side>::pvs_no_ttable_no_cache(const State node,
                                                                 int8_t alpha, const int8_t beta) const {
+    constexpr bool current_color = (depth % 2 == 0) ? side : !side;
 //        cout << (current_color ? "Black turn" : "White turn") << endl;
 //        node.print();
     if (COUNT_STATS) TIME::positions_searched++;
     constexpr bool is_last_depth = depth == maxDepth;
     constexpr uint8_t next_depth = depth + 1;
-    constexpr bool is_next_depth_last = next_depth == maxDepth;
+    constexpr bool cache_still_in_use = depth <= MAX_CACHE_STORE_DEPTH;
 
     if (is_last_depth) {
         return 0;
@@ -355,7 +372,7 @@ inline int8_t AlphaBeta<maxDepth, side>::pvs_no_ttable_no_cache(const State node
         const uint8_t row = col_heights[col];
         const uint64_t my_new_board = my_pieces | Util::MASKS[row][col];
         const State child = applyAction<current_color>(my_new_board, node, row, col);
-        return -pvs<!current_color, next_depth>(child, -beta, -alpha);
+        return -pvs<next_depth>(child, -beta, -alpha);
     } else {
         if (COUNT_STATS) TIME::num_fm_zero++;
     }
@@ -386,12 +403,12 @@ inline int8_t AlphaBeta<maxDepth, side>::pvs_no_ttable_no_cache(const State node
             const State child = applyAction<current_color>(child_board, node, row, col);
             int8_t score;
             if (i == 0) {
-                score = -pvs<!current_color, next_depth>(child, -beta, -alpha);
+                score = -pvs<next_depth>(child, -beta, -alpha);
             } else {
-                score = -pvs<!current_color, next_depth>(child, -alpha - 1, -alpha);
+                score = -pvs<next_depth>(child, -alpha - 1, -alpha);
                 if (alpha < score && score < beta) {
                     if (COUNT_STATS) TIME::num_wrong_searches++;
-                    score = -pvs<!current_color, next_depth>(child, -beta, -score);
+                    score = -pvs<next_depth>(child, -beta, -score);
                 }
             }
             alpha = Util::max(alpha, score);
@@ -412,14 +429,26 @@ inline int8_t AlphaBeta<maxDepth, side>::pvs_no_ttable_no_cache(const State node
 
 
 template<const uint8_t maxDepth, const bool side>
+//template<const bool current_color, const bool cache_still_in_use>
 template<const bool current_color>
 inline State AlphaBeta<maxDepth, side>::applyAction(const uint64_t child_board, const State node, const uint8_t row,
                                                     const uint8_t col) const {
+    const uint64_t new_black_pieces = current_color ? child_board : node.blackPieces;
+    const uint64_t new_white_pieces = current_color ? node.whitePieces : child_board;
+    const uint32_t new_hash_index = node.hash_index ^ HASH_POSITIONS[current_color][row][col];
+//    const uint32_t new_rev_hash_index =
+//            cache_still_in_use ?
+//            node.reversed_hash_index ^ HASH_POSITIONS[current_color][5-row][6-col]
+//            : 0;
+    const uint32_t new_rev_hash_index = node.reversed_hash_index ^ HASH_POSITIONS[current_color][5-row][6-col];
+
+
     switch (col) {
         case 0: {
-            return State(current_color ? child_board : node.blackPieces,
-                         current_color ? node.whitePieces : child_board,
-                         node.hash_index ^ HASH_POSITIONS[current_color][row][col],
+            return State(new_black_pieces,
+                         new_white_pieces,
+                         new_hash_index,
+                         new_rev_hash_index,
                          node.col0_height + 1,
                          node.col1_height,
                          node.col2_height,
@@ -430,9 +459,10 @@ inline State AlphaBeta<maxDepth, side>::applyAction(const uint64_t child_board, 
             );
         }
         case 1: {
-            return State(current_color ? child_board : node.blackPieces,
-                         current_color ? node.whitePieces : child_board,
-                         node.hash_index ^ HASH_POSITIONS[current_color][row][col],
+            return State(new_black_pieces,
+                         new_white_pieces,
+                         new_hash_index,
+                         new_rev_hash_index,
                          node.col0_height,
                          node.col1_height + 1,
                          node.col2_height,
@@ -443,9 +473,10 @@ inline State AlphaBeta<maxDepth, side>::applyAction(const uint64_t child_board, 
             );
         }
         case 2: {
-            return State(current_color ? child_board : node.blackPieces,
-                         current_color ? node.whitePieces : child_board,
-                         node.hash_index ^ HASH_POSITIONS[current_color][row][col],
+            return State(new_black_pieces,
+                         new_white_pieces,
+                         new_hash_index,
+                         new_rev_hash_index,
                          node.col0_height,
                          node.col1_height,
                          node.col2_height + 1,
@@ -456,9 +487,10 @@ inline State AlphaBeta<maxDepth, side>::applyAction(const uint64_t child_board, 
             );
         }
         case 3: {
-            return State(current_color ? child_board : node.blackPieces,
-                         current_color ? node.whitePieces : child_board,
-                         node.hash_index ^ HASH_POSITIONS[current_color][row][col],
+            return State(new_black_pieces,
+                         new_white_pieces,
+                         new_hash_index,
+                         new_rev_hash_index,
                          node.col0_height,
                          node.col1_height,
                          node.col2_height,
@@ -469,9 +501,10 @@ inline State AlphaBeta<maxDepth, side>::applyAction(const uint64_t child_board, 
             );
         }
         case 4: {
-            return State(current_color ? child_board : node.blackPieces,
-                         current_color ? node.whitePieces : child_board,
-                         node.hash_index ^ HASH_POSITIONS[current_color][row][col],
+            return State(new_black_pieces,
+                         new_white_pieces,
+                         new_hash_index,
+                         new_rev_hash_index,
                          node.col0_height,
                          node.col1_height,
                          node.col2_height,
@@ -482,9 +515,10 @@ inline State AlphaBeta<maxDepth, side>::applyAction(const uint64_t child_board, 
             );
         }
         case 5: {
-            return State(current_color ? child_board : node.blackPieces,
-                         current_color ? node.whitePieces : child_board,
-                         node.hash_index ^ HASH_POSITIONS[current_color][row][col],
+            return State(new_black_pieces,
+                         new_white_pieces,
+                         new_hash_index,
+                         new_rev_hash_index,
                          node.col0_height,
                          node.col1_height,
                          node.col2_height,
@@ -495,9 +529,10 @@ inline State AlphaBeta<maxDepth, side>::applyAction(const uint64_t child_board, 
             );
         }
         case 6: {
-            return State(current_color ? child_board : node.blackPieces,
-                         current_color ? node.whitePieces : child_board,
-                         node.hash_index ^ HASH_POSITIONS[current_color][row][col],
+            return State(new_black_pieces,
+                         new_white_pieces,
+                         new_hash_index,
+                         new_rev_hash_index,
                          node.col0_height,
                          node.col1_height,
                          node.col2_height,
@@ -508,7 +543,109 @@ inline State AlphaBeta<maxDepth, side>::applyAction(const uint64_t child_board, 
             );
         }
     }
+
+//    switch (col) {
+//        case 0: {
+//            return State(new_black_pieces,
+//                         new_white_pieces,
+//                         new_hash_index,
+//                         new_rev_hash_index,
+//                         node.col0_height + 1,
+//                         node.col1_height,
+//                         node.col2_height,
+//                         node.col3_height,
+//                         node.col4_height,
+//                         node.col5_height,
+//                         node.col6_height
+//            );
+//        }
+//        case 1: {
+//            return State(new_black_pieces,
+//                         new_white_pieces,
+//                         new_hash_index,
+//                         new_rev_hash_index,
+//                         node.col0_height,
+//                         node.col1_height + 1,
+//                         node.col2_height,
+//                         node.col3_height,
+//                         node.col4_height,
+//                         node.col5_height,
+//                         node.col6_height
+//            );
+//        }
+//        case 2: {
+//            return State(new_black_pieces,
+//                         new_white_pieces,
+//                         new_hash_index,
+//                         new_rev_hash_index,
+//                         node.col0_height,
+//                         node.col1_height,
+//                         node.col2_height + 1,
+//                         node.col3_height,
+//                         node.col4_height,
+//                         node.col5_height,
+//                         node.col6_height
+//            );
+//        }
+//        case 3: {
+//            return State(new_black_pieces,
+//                         new_white_pieces,
+//                         new_hash_index,
+//                         new_rev_hash_index,
+//                         node.col0_height,
+//                         node.col1_height,
+//                         node.col2_height,
+//                         node.col3_height + 1,
+//                         node.col4_height,
+//                         node.col5_height,
+//                         node.col6_height
+//            );
+//        }
+//        case 4: {
+//            return State(new_black_pieces,
+//                         new_white_pieces,
+//                         new_hash_index,
+//                         new_rev_hash_index,
+//                         node.col0_height,
+//                         node.col1_height,
+//                         node.col2_height,
+//                         node.col3_height,
+//                         node.col4_height + 1,
+//                         node.col5_height,
+//                         node.col6_height
+//            );
+//        }
+//        case 5: {
+//            return State(new_black_pieces,
+//                         new_white_pieces,
+//                         new_hash_index,
+//                         new_rev_hash_index,
+//                         node.col0_height,
+//                         node.col1_height,
+//                         node.col2_height,
+//                         node.col3_height,
+//                         node.col4_height,
+//                         node.col5_height + 1,
+//                         node.col6_height
+//            );
+//        }
+//        case 6: {
+//            return State(new_black_pieces,
+//                         new_white_pieces,
+//                         new_hash_index,
+//                         new_rev_hash_index,
+//                         node.col0_height,
+//                         node.col1_height,
+//                         node.col2_height,
+//                         node.col3_height,
+//                         node.col4_height,
+//                         node.col5_height,
+//                         node.col6_height + 1
+//            );
+//        }
+//    }
 }
+
 
 template<const uint8_t maxDepth, const bool side>
 inline uint8_t AlphaBeta<maxDepth, side>::getColHeight(const uint64_t ORd_board, const uint8_t col) const {

@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
 //    uint64_t blackPieces = 289510328633712640ULL;
 //    uint64_t whitePieces = 4672591690525580290ULL;
     const State board = Helpers2::getStartingBoard();
-    uint64_t reversed = Util::reverse_board(board.whitePieces);
+    uint64_t reversed = reverse_board(board.whitePieces);
 //    const State board = Util::getBoard(
 //            "__WWW__"
 //            "WBWBWBW"
@@ -43,19 +43,19 @@ int main(int argc, char *argv[]) {
 //    Util::print_ull(15ULL);
 //    cout << ((int) alphaBeta.min_value(board, -100, 100, 0)) << endl;
     cout << "initializing alphabeta" << endl;
-    // 34 : 32
-    // 35 : 76
-    // 36 : 231
-    // 37 : 381
-    // 38 : 549
-    // 39 : 1065.44
-    const AlphaBeta<35, sideBool> alphaBeta;
+    // 34 :
+    // 35 :
+    // 36 :
+    // 37 :
+    // 38 : 326
+    // 39 :
+    const AlphaBeta<38, sideBool> alphaBeta;
     struct timeval tp;
     gettimeofday(&tp, NULL);
     long int t1 = tp.tv_sec * 1000 + tp.tv_usec / 1000;
 
 //    cout << (int) alphaBeta.pvs_init<sideBool>(board) << endl;
-    const uint8_t move = alphaBeta.MTDF<sideBool>(board);
+    const uint8_t move = alphaBeta.MTDF(board);
     cout << "move to make : " << (int) move << endl;
 //    cout << (int) alphaBeta.pvs_no_cache<sideBool,0>(board, NEG_INFINITY, POS_INFINITY) << endl;
 
@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
     cout << "num forced moves >= 2           : " << TIME::num_fm_two << endl;
     cout << "num short circuit wins          : " << TIME::num_short_circuit_wins << endl;
 
-    getchar();
+//    getchar();
 }
 
 

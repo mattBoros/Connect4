@@ -58,6 +58,7 @@ namespace Util {
                 bPieces,
                 wPieces,
                 33554432 - 1,
+                33554432 - 1,
                 0, 0, 0, 0, 0, 0, 0
 //,0ULL
 //                ,numSpotsFilled
@@ -76,8 +77,6 @@ namespace Util {
     };
 
     static inline int8_t max(const int8_t x, const int8_t y) __attribute__ ((hot, const));
-
-    static inline uint64_t reverse_board(const uint64_t board)  __attribute__ ((hot, const));
 
     static void print_ull(const uint64_t board) {
         for (uint8_t col = 0; col < 8; ++col) {
@@ -101,19 +100,6 @@ static inline int8_t Util::max(const int8_t x, const int8_t y) {
 //        return y > x ? y : x;
 //        const bool comp = y > x;
 //        return comp*y + (!comp)*x;
-}
-
-static inline uint64_t Util::reverse_board(const uint64_t board) {
-    const uint64_t COL0 = (board & 63ULL);
-    const uint64_t COL1 = (board & 16128ULL) >> 8ULL;
-    const uint64_t COL2 = (board & 4128768ULL) >> 16ULL;
-    const uint64_t COL3 = (board & 1056964608ULL) >> 24ULL;
-    const uint64_t COL4 = (board & 270582939648ULL) >> 32ULL;
-    const uint64_t COL5 = (board & 69269232549888ULL) >> 40ULL;
-    const uint64_t COL6 = (board & 17732923532771328ULL) >> 48ULL;
-
-    return COL6 | (COL5 << 8ULL) | (COL4 << 16ULL) | (COL3 << 24ULL)
-           | (COL2 << 32ULL) | (COL1 << 40ULL) | (COL0 << 48ULL);
 }
 
 

@@ -38,7 +38,7 @@ public:
 };
 
 static const StoredSearch NULL_CACHE_KEY(
-        State(UINT64_MAX, UINT64_MAX, UINT32_MAX,
+        State(UINT64_MAX, UINT64_MAX, UINT32_MAX, UINT32_MAX,
               0, 0, 0, 0, 0, 0, 0),
         INT8_MAX, INT8_MAX);
 
